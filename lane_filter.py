@@ -9,14 +9,21 @@ class IncorrectImage(Exception):
 
 
 class LaneFilter:
+    """Class containing various functions for image preprocessing"""
+
     def __init__(self):
         self.white_thresholds = None
 
     def convert_to_hsv(self, image):
-        """
+        """Converts given image to HSV color scale
 
-        :param image:
-        :return:
+        Parameters
+        ----------
+        image -- numpy array representing an image
+
+        Returns
+        -------
+        Image in HSV color scale
         """
 
         if not isinstance(image, np.ndarray):
@@ -25,10 +32,15 @@ class LaneFilter:
             return cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
     def convert_to_hsl(self, image):
-        """
+        """Converts given image to HSL color scale
 
-        :param image:
-        :return:
+        Parameters
+        ----------
+        image -- numpy array representing an image
+
+        Returns
+        -------
+        Image in HSL color scale
         """
 
         if not isinstance(image, np.ndarray):
@@ -37,10 +49,15 @@ class LaneFilter:
             return cv2.cvtColor(image, cv2.COLOR_BGR2HLS)
 
     def convert_to_lab(self, image):
-        """
+        """Converts given image to LAB color scale
 
-        :param image:
-        :return:
+        Parameters
+        ----------
+        image -- numpy array representing an image
+
+        Returns
+        -------
+        Image in LAB color scale
         """
 
         if not isinstance(image, np.ndarray):
@@ -49,29 +66,54 @@ class LaneFilter:
             return cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
 
     def img_threshold(self, image, threshold, channel_number):
+        """Applies a threshold to a specific image color channel
+
+        Parameters
+        ----------
+        image -- numpy array representing an image
+
+        threshold -- an integer value to threshold the image
+
+        channel_number -- color channel index to be thresholded
+
+        Returns
+        -------
+        Binary image after thresholding
+        """
+
+        if channel_number not in range(image.shape[2]):
+            raise IncorrectImage('Insufficient color channels')
+
         # Setting the channel
         channel = image[:, :, channel_number]
 
         return cv2.threshold(channel, threshold, 255, cv2.THRESH_BINARY)
 
     def resize_img(self, image):
-        """
+        """Reduces the image size
 
-        :param image:
-        :return:
+        Parameters
+        ----------
+        image -- numpy array representing an image
+
+        Returns
+        -------
+        Image of a twice smaller size
         """
 
         return cv2.resize(image, (image.shape[1]//2, image.shape[0]//2))
 
-    def preprocess_img(self, image):
-        """
+    def gaussian_blur(self, image):
+        """Applies gaussian blur to an image
 
-        :param image:
-        :return:
-        """
+        Parameters
+        ----------
+        image -- numpy array representing an image
 
-        # Scaling to gray
-        # gray_img = cv2.cvtColor(np.copy(image), cv2.COLOR_BGR2GRAY)
+        Returns
+        -------
+        Image with gaussian blur appied
+        """
 
         # Reducing noise - smoothing
         blurred_img = cv2.GaussianBlur(image, (3, 3), 0)
@@ -79,6 +121,16 @@ class LaneFilter:
         return blurred_img
 
     def get_edges(self, image):
+        """Applies few functions to extract edges from an image
+
+        Parameters
+        ----------
+        image -- numpy array representing an image
+
+        Returns
+        -------
+
+        """
         kernel = np.ones((5, 5))
         canny = cv2.Canny(image, 100, 200)
         dilate = cv2.dilate(canny, kernel, iterations=1)
@@ -86,6 +138,19 @@ class LaneFilter:
         return erode
 
     def select_hsl_white_yellow(self, image):
+        """Extracts only white and yellow color from an HLS image
+
+        Parameters
+        ----------
+        image -- numpy array representing an image
+
+        Returns
+        -------
+        mask -- binary image with extracted only white and yellow color
+
+        masked -- original image with extracted only white and yellow color
+        """
+
         white_lower = np.array([0, 0, 200])
         white_upper = np.array([255, 255, 255])
 
@@ -101,18 +166,44 @@ class LaneFilter:
         masked = cv2.bitwise_and(image, image, mask=mask)
         return mask, masked
 
-    def select_yellow_hls(self, image):
-        # # Good for both
-        # both_lower = np.array([20, 150, 0])
-        # both_upper = np.array([255, 255, 255])
+    def select_yellow_hls(self, image, mask_thresholds):
+        """Extracts only yellow color from an HLS image
 
-        yellow_lower = np.array([0, 150, 10])
-        yellow_upper = np.array([130, 255, 255])
+        Parameters
+        ----------
+        image -- numpy array representing an image
+
+        Returns
+        -------
+        mask -- binary image with extracted only yellow color
+        """
+
+        yellow_lower = np.array(mask_thresholds[0])
+        yellow_upper = np.array(mask_thresholds[1])
+
+        # yellow_lower = np.array([0, 150, 10]) # mask_thresholds[0]
+        # yellow_upper = np.array([130, 255, 255]) # mask_thresholds[1]
 
         mask = cv2.inRange(image, yellow_lower, yellow_upper)
         return mask
 
-    def apply_sobel(self, image, channel_number, magnitude_thresh=(50, 210)):  # magnitude_thresh=(70, 230)):
+    def apply_sobel(self, image, channel_number, magnitude_thresh=(50, 210)):
+        """Applies sobel operator
+
+        Parameters
+        ----------
+        image -- numpy array representing an image
+
+        channel_number -- number of the channel to extract
+
+        magnitude_thresh -- threshold for image filtering
+            default = (50, 210)
+
+        Returns
+        -------
+        Binary image with sobel operator applied
+        """
+
         # Setting the channel number
         channel = image[:, :, channel_number]
 
@@ -126,8 +217,31 @@ class LaneFilter:
 
         return binary
 
+    def sum_all_binary(self, *args):
+        """Applies a bitwise operation and sums all the given images
+
+        Parameters
+        ----------
+        image -- numpy array representing an image
+
+        Returns
+        -------
+        final_image -- binary image with extracted only yellow color
+        """
+
+        if len(args) < 2:
+            raise IncorrectImage('Insufficient arguments to perform bitwise operation')
+
+        final_image = np.zeros_like(args[0])
+        for img in args:
+            final_image = cv2.bitwise_or(final_image, img)
+
+        return final_image
+
 
 class Line:
+    """Class representing a line"""
+
     def __init__(self):
 
         # was the line detected in the last iteration?
@@ -197,7 +311,6 @@ class Line:
             self.run_line_pipe()
             return
 
-
     def diff_check(self):
         if self.diffs[0] > 0.001:
             return True
@@ -208,9 +321,8 @@ class Line:
         return False
 
     def calc_best_fit(self):
-        """
-        calculate the average, if needed
-        """
+        """Calculates the best line fit based on an average"""
+
         # add the latest fit to the previous fit list
         self.previous_fits_px.append(self.current_fit_px)
         self.previous_fits_m.append(self.current_fit_m)
@@ -226,11 +338,9 @@ class Line:
         self.best_fit_m = np.average(self.previous_fits_m, axis=0)
         return
 
-
     def calc_radius(self):
-        """
-        left_fit and right_fit are assumed to have already been converted to meters
-        """
+        """left_fit and right_fit are assumed to have already been converted to meters"""
+
         y_eval = self.y_eval
         fit = self.best_fit_m
 

@@ -35,19 +35,22 @@ def get_img_names(path=None):
     return names
 
 
+WARP_TRACKBAR_NAME = 'Warp Trackbar'
+THRESH_TRACKBAR_NAME = 'Threshold Trackbar'
+
+
 def main():
-    WARP_TRACKBAR_NAME = 'Warp Trackbar'
 
     cap = cv2.VideoCapture('test_videos/project_video.mp4')
 
     img_filter = LaneFilter()
     initialize_trackbar([760, 450, 1150, 650], WARP_TRACKBAR_NAME, 1280)
-    initialize_threshold_trackbar(((0, 150, 10), (130, 255, 255)), 'Threshold Trackbar', 255)
+    initialize_threshold_trackbar(((0, 150, 10), (130, 255, 255)), THRESH_TRACKBAR_NAME, 255)
 
     ym_per_pix = 30/720
     xm_per_pix = 3.7/550
-    leftLine = Line()
-    rightLine = Line()
+    left_line = Line()
+    right_line = Line()
 
     while cap.isOpened():
         ret, frame = cap.read()
@@ -57,8 +60,6 @@ def main():
 
         height = frame.shape[0]
         width = frame.shape[1]
-
-        final_image = frame.copy()
 
         src_pts = val_trackbar(frame, WARP_TRACKBAR_NAME)
         dst_pts = np.array([(0, height), (0, 0), (width, 0), (width, height)], dtype=np.float32)
@@ -73,11 +74,11 @@ def main():
 
         _, thresh_rgb_r = img_filter.img_threshold(preprocessed_img, 190, 0)
 
-        hls = img_filter.convert_to_hsl(preprocessed_img)
+        # hls = img_filter.convert_to_hsl(preprocessed_img)
 
         # sobel = img_filterapply_sobel(hls, 1)
 
-        mask_thresholds = get_thresh_trackbar_vals('Threshold Trackbar')
+        mask_thresholds = get_thresh_trackbar_vals(THRESH_TRACKBAR_NAME)
 
         yellow_mask = img_filter.select_yellow_hls(preprocessed_img, mask_thresholds)
 
@@ -89,10 +90,10 @@ def main():
 
         try:
             # If we found lines previously, run the simplified line fitter
-            if leftLine.detected is True and rightLine.detected is True:
+            if left_line.detected is True and right_line.detected is True:
                 left_fit, right_fit, left_fit_m, right_fit_m, out_img = calc_line_fits_from_prev(masked_image,
                                                                                                  masked_image,
-                                                                                                 leftLine, rightLine,
+                                                                                                 left_line, right_line,
                                                                                                  ym_per_pix,
                                                                                                  xm_per_pix)
             else:
@@ -102,17 +103,20 @@ def main():
                                                                                        xm_per_pix)
         except TypeError:
             pass
+        except np.RankWarning:
+            print('Could not find a line')
+            return
 
         # Add these fits to the line classes
-        leftLine.add_new_fit(left_fit, left_fit_m)
-        rightLine.add_new_fit(right_fit, left_fit_m)
+        left_line.add_new_fit(left_fit, left_fit_m)
+        right_line.add_new_fit(right_fit, left_fit_m)
 
         # get radius and center distance
-        curve_rad = combine_radius(leftLine, rightLine)
-        head, center_distance_m, center_distance_px = get_center_dist(leftLine, rightLine, xm_per_pix)
+        curve_rad = combine_radius(left_line, right_line)
+        head, center_distance_m, center_distance_px = get_center_dist(left_line, right_line, xm_per_pix, height, width)
 
         # create the final image
-        result = create_final_image(frame, masked_image, leftLine, rightLine, img_warper)
+        result = create_final_image(frame, masked_image, left_line, right_line, img_warper)
         
         # add the text to the image
         result = add_image_text(result, curve_rad, head, center_distance_m, center_distance_px)

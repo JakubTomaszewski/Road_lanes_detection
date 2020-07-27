@@ -1,11 +1,6 @@
 import cv2
 import numpy as np
-
-
-class IncorrectImage(Exception):
-    def __init__(self, message):
-        super().__init__(message)
-        self.message = message
+from exceptions import IncorrectImage
 
 
 class LaneFilter:
@@ -243,6 +238,7 @@ class Line:
     """Class representing a line"""
 
     def __init__(self):
+        """Initializing parameters"""
 
         # was the line detected in the last iteration?
         self.detected = False
@@ -251,11 +247,11 @@ class Line:
         self.best_fit_px = None
         self.best_fit_m = None
 
-        #polynomial coefficients for the most recent fit
+        # polynomial coefficients for the most recent fit
         self.current_fit_px = None
         self.current_fit_m = None
 
-        #radius of curvature of the line in some units
+        # radius of curvature of the line in some units
         self.radius_of_curvature = None
 
         # center position of car
@@ -265,8 +261,8 @@ class Line:
         self.previous_fits_px = []
         self.previous_fits_m = []
 
-        #difference in fit coefficients between last and new fits
-        self.diffs = np.array([0,0,0], dtype='float')
+        # difference in fit coefficients between last and new fits
+        self.diffs = np.array([0, 0, 0], dtype='float')
 
         # meters per pixel in y dimension
         self.ym_per_pix = 30/720
@@ -274,19 +270,25 @@ class Line:
         # y_eval is where we want to evaluate the fits for the line radius calcuation
         # for us it's at the bottom of the image for us, and because we know
         # the size of our video/images we can just hardcode it
-        self.y_eval = 720 * self.ym_per_pix
+        self.y_eval = 720 * self.ym_per_pix  # if the video y size is other, just change 720 with image.shape[0]
 
         # camera position is where the camera is located relative to the image
         # we're assuming it's in the middle
-        self.camera_position = 640
+        self.camera_position = 640  # image.shape[1]//2
 
     def run_line_pipe(self):
+        """Runs the full pipeline"""
         self.calc_best_fit()
         self.calc_radius()
 
     def add_new_fit(self, new_fit_px, new_fit_m):
-        """
-        Add a new fit to the Line class
+        """Add a new fit to the Line class
+
+        Parameters
+        ----------
+        new_fit_px -- new line fit in pixels
+
+        new_fit_m -- new line fit in meters
         """
 
         # If this is our first line, then we will have to take it
@@ -305,6 +307,7 @@ class Line:
                 print(self.diffs)
                 self.defected = False
                 return
+
             self.detected = True
             self.current_fit_px = new_fit_px
             self.current_fit_m = new_fit_m
@@ -312,9 +315,11 @@ class Line:
             return
 
     def diff_check(self):
-        if self.diffs[0] > 0.001:
+        """Checks if the difference in previous line fit and the current fit is not too large        """
+
+        if self.diffs[0] > 0.02:
             return True
-        if self.diffs[1] > 0.25:
+        if self.diffs[1] > 0.4:
             return True
         if self.diffs[2] > 1000.:
             return True
@@ -336,10 +341,14 @@ class Line:
         # Just average everything
         self.best_fit_px = np.average(self.previous_fits_px, axis=0)
         self.best_fit_m = np.average(self.previous_fits_m, axis=0)
+
         return
 
     def calc_radius(self):
-        """left_fit and right_fit are assumed to have already been converted to meters"""
+        """Calculates the curve radius in meters
+
+        left_fit and right_fit are assumed to have already been converted to meters
+        """
 
         y_eval = self.y_eval
         fit = self.best_fit_m
